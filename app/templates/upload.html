@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Upload PDF — Hazza LearnAI{% endblock %}
+
+{% block content %}
+<section class="page-shell narrow">
+    <div class="section-heading">
+        <p class="eyebrow">Mulai latihan</p>
+        <h1>Upload PDF Materi</h1>
+        <p>Pilih PDF berisi teks, tentukan jumlah soal, lalu sistem akan membuat quiz otomatis.</p>
+    </div>
+
+    <form id="upload-form" class="upload-card glass-card" action="{{ url_for('main.upload') }}" method="post" enctype="multipart/form-data">
+        <label class="drop-zone" for="pdf_file">
+            <input id="pdf_file" name="pdf_file" type="file" accept="application/pdf" required>
+            <span class="upload-icon">↥</span>
+            <strong id="file-label">Klik untuk memilih PDF</strong>
+            <small>Maksimal 10 MB • PDF harus berisi teks</small>
+        </label>
+
+        <label class="field-label" for="total_questions">Jumlah soal</label>
+        <select id="total_questions" name="total_questions">
+            <option value="5">5 soal</option>
+            <option value="10" selected>10 soal</option>
+            <option value="15">15 soal</option>
+        </select>
+
+        <button id="generate-button" class="primary-btn full" type="submit">Buat Latihan Soal</button>
+    </form>
+</section>
+{% endblock %}

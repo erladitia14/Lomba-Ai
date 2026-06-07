@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Quiz — Hazza LearnAI{% endblock %}
+
+{% block content %}
+<section class="page-shell">
+    <div class="section-heading">
+        <p class="eyebrow">Quiz dari {{ quiz_session.filename }}</p>
+        <h1>Jawab Latihan Soal</h1>
+        <p>Pilih satu jawaban paling tepat untuk setiap pertanyaan.</p>
+    </div>
+
+    <form class="quiz-form" method="post">
+        {% for question in questions %}
+            {% set q_index = loop.index0 %}
+            <article class="question-card glass-card">
+                <div class="question-top">
+                    <span>Soal {{ loop.index }}</span>
+                    <small>{{ loop.index }} / {{ questions|length }}</small>
+                </div>
+                <h2>{{ question.question }}</h2>
+                <div class="options-grid">
+                    {% for option in question.options %}
+                        <label class="option-card">
+                            <input type="radio" name="question_{{ q_index }}" value="{{ option }}" required>
+                            <span>{{ option }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </article>
+        {% endfor %}
+
+        <button id="submit-quiz" class="primary-btn full" type="submit">Lihat Hasil</button>
+    </form>
+</section>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Hasil Quiz — Hazza LearnAI{% endblock %}
+
+{% block content %}
+<section class="page-shell">
+    <div class="result-hero glass-card">
+        <p class="eyebrow">Hasil latihan</p>
+        <h1>Skor Kamu: {{ quiz_result.score }}%</h1>
+        <p>{{ quiz_result.score // (100 // quiz_result.total_questions if quiz_result.total_questions else 1) }} dari {{ quiz_result.total_questions }} soal terjawab benar.</p>
+        <a id="new-quiz" class="primary-btn" href="{{ url_for('main.upload') }}">Upload PDF Baru</a>
+    </div>
+
+    <div class="review-list">
+        {% for question in questions %}
+            {% set q_index = loop.index0|string %}
+            {% set user_answer = quiz_result.user_answers.get(q_index) %}
+            {% set is_correct = user_answer == question.answer %}
+            <article class="review-card glass-card {{ 'correct' if is_correct else 'wrong' }}">
+                <div class="question-top">
+                    <span>Review Soal {{ loop.index }}</span>
+                    <small>{{ 'Benar' if is_correct else 'Perlu dipelajari' }}</small>
+                </div>
+                <h2>{{ question.question }}</h2>
+                <p><strong>Jawaban kamu:</strong> {{ user_answer or '-' }}</p>
+                <p><strong>Jawaban benar:</strong> {{ question.answer }}</p>
+                <p class="explanation">{{ question.explanation }}</p>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

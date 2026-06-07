@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Hazza LearnAI — PDF Jadi Latihan Soal{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-copy">
+        <p class="eyebrow">Belajar lebih cepat dari materi PDF</p>
+        <h1>Ubah PDF menjadi latihan soal interaktif.</h1>
+        <p class="hero-text">Upload materi pelajaran, lalu Hazza LearnAI akan membuat quiz pilihan ganda secara lokal tanpa login dan tanpa API eksternal.</p>
+        <div class="hero-actions">
+            <a id="start-upload" class="primary-btn" href="{{ url_for('main.upload') }}">Buat Latihan Soal</a>
+            <a class="ghost-btn" href="#steps">Lihat Cara Kerja</a>
+        </div>
+    </div>
+    <div class="hero-panel glass-card">
+        <div class="panel-badge">PDF → Quiz</div>
+        <div class="mock-card active">Upload materi belajar</div>
+        <div class="mock-card">Ekstrak konsep penting</div>
+        <div class="mock-card">Jawab soal & lihat skor</div>
+    </div>
+</section>
+
+<section id="steps" class="steps-section">
+    <h2>Cara Kerjanya</h2>
+    <div class="steps-grid">
+        <article class="step-card">
+            <span>01</span>
+            <h3>Upload PDF</h3>
+            <p>Pilih materi PDF yang berisi teks, bukan hasil scan gambar.</p>
+        </article>
+        <article class="step-card">
+            <span>02</span>
+            <h3>Generate Soal</h3>
+            <p>Sistem membaca kalimat penting dan membuat soal pilihan ganda.</p>
+        </article>
+        <article class="step-card">
+            <span>03</span>
+            <h3>Latihan & Review</h3>
+            <p>Kerjakan quiz, dapatkan skor, lalu pelajari pembahasannya.</p>
+        </article>
+    </div>
+</section>
+{% endblock %}
