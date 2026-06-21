@@ -2,7 +2,7 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 
 from .extensions import db
 from .models import QuizResult, QuizSession
-from .services.pdf_service import allowed_file, extract_text_from_pdf, save_pdf
+from .services.pdf_service import allowed_file, extract_text_from_pdf, get_safe_filename
 from .services.question_generator import generate_questions
 from .services.text_cleaner import clean_text
 
@@ -31,8 +31,8 @@ def upload():
         return redirect(url_for("main.upload"))
 
     try:
-        filename, path = save_pdf(file, current_app.config["UPLOAD_FOLDER"])
-        raw_text = extract_text_from_pdf(path)
+        filename = get_safe_filename(file)
+        raw_text = extract_text_from_pdf(file)
         cleaned_text = clean_text(raw_text)
 
         if len(cleaned_text) < 200:
@@ -53,7 +53,7 @@ def upload():
         return redirect(url_for("main.quiz", session_id=quiz_session.id))
     except Exception as exc:
         current_app.logger.exception(exc)
-        flash("Terjadi kesalahan saat memproses PDF. Coba file lain.", "error")
+        flash(f"Terjadi kesalahan saat memproses PDF atau membuat soal dengan AI: {exc}", "error")
         return redirect(url_for("main.upload"))
 
 

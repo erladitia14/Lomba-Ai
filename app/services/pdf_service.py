@@ -1,22 +1,22 @@
-import os
-from werkzeug.utils import secure_filename
+from io import BytesIO
+
 from pypdf import PdfReader
+from werkzeug.utils import secure_filename
 
 
 def allowed_file(filename, allowed_extensions):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed_extensions
 
 
-def save_pdf(file_storage, upload_folder):
-    os.makedirs(upload_folder, exist_ok=True)
-    filename = secure_filename(file_storage.filename)
-    path = os.path.join(upload_folder, filename)
-    file_storage.save(path)
-    return filename, path
+def get_safe_filename(file_storage):
+    
+    return secure_filename(file_storage.filename)
 
 
-def extract_text_from_pdf(path):
-    reader = PdfReader(path)
+def extract_text_from_pdf(file_storage):
+    file_storage.stream.seek(0)
+    pdf_bytes = BytesIO(file_storage.read())
+    reader = PdfReader(pdf_bytes)
     pages = []
 
     for page in reader.pages:
