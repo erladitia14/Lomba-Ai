@@ -77,7 +77,115 @@ def _extract_json_object(content):
     if start == -1 or end == -1 or start >= end:
         raise ValueError("AI response does not contain a JSON object")
 
-    return json.loads(content[start:end + 1])
+    json_text = content[start:end + 1]
+    try:
+        return json.loads(json_text)
+    except json.JSONDecodeError:
+        repaired = _repair_json_text(json_text)
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError as exc:
+            lenient_questions = _extract_questions_lenient(json_text)
+            if lenient_questions:
+                return {"questions": lenient_questions}
+            raise ValueError(f"AI returned invalid JSON near: {_json_error_context(json_text, exc)}") from exc
+
+
+def _repair_json_text(json_text):
+    # Common LLM mistakes: trailing commas and missing commas between object fields.
+    json_text = re.sub(r",\s*([}\]])", r"\1", json_text)
+    json_text = re.sub(r'"\s*\n\s*"(question|options|answer|explanation|source)"\s*:', r'",\n      "\1":', json_text)
+    json_text = re.sub(r'(\]|\})\s*\n\s*"(question|options|answer|explanation|source)"\s*:', r'\1,\n      "\2":', json_text)
+    json_text = re.sub(r'(\}|\])\s*\n\s*(\{|\[)', r'\1,\n    \2', json_text)
+    return json_text
+
+
+def _extract_questions_lenient(json_text):
+    questions = []
+    for block in _iter_object_blocks(json_text):
+        item = _parse_question_block(block)
+        if item:
+            questions.append(item)
+    return questions
+
+
+def _iter_object_blocks(text):
+    depth = 0
+    start = None
+    in_string = False
+    escaped = False
+
+    for index, char in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                yield text[start:index + 1]
+                start = None
+
+
+def _parse_question_block(block):
+    if '"question"' not in block or '"options"' not in block or '"answer"' not in block:
+        return None
+
+    question = _field_string(block, "question")
+    answer = _field_string(block, "answer")
+    explanation = _field_string(block, "explanation")
+    source = _field_string(block, "source")
+    options = _field_array(block, "options")
+
+    if not question or not answer or len(options) != 4:
+        return None
+
+    return {
+        "question": question,
+        "options": options,
+        "answer": answer,
+        "explanation": explanation or f"Jawaban yang tepat adalah {answer}.",
+        "source": source,
+    }
+
+
+def _field_string(block, field):
+    match = re.search(rf'"{field}"\s*:\s*"((?:\\.|[^"\\])*)"', block, flags=re.DOTALL)
+    if not match:
+        return ""
+    return _decode_json_string(match.group(1))
+
+
+def _field_array(block, field):
+    match = re.search(rf'"{field}"\s*:\s*\[(.*?)\]', block, flags=re.DOTALL)
+    if not match:
+        return []
+    return [_decode_json_string(item) for item in re.findall(r'"((?:\\.|[^"\\])*)"', match.group(1))]
+
+
+def _decode_json_string(value):
+    try:
+        return json.loads(f'"{value}"').strip()
+    except json.JSONDecodeError:
+        return value.strip()
+
+
+def _json_error_context(json_text, exc):
+    start = max(0, exc.pos - 160)
+    end = min(len(json_text), exc.pos + 160)
+    snippet = json_text[start:end].replace("\n", " ")
+    return f"line {exc.lineno} column {exc.colno}: {snippet}"
 
 
 def _normalize_ai_questions(payload, total):
@@ -133,8 +241,9 @@ Aturan wajib:
 - Jawaban benar harus sama persis dengan salah satu opsi.
 - Distraktor harus masuk akal dan tidak terlalu mudah ditebak.
 - Explanation singkat menjelaskan alasan jawaban benar.
-- Source berisi potongan kalimat/paragraf pendukung dari materi.
+- Source berisi potongan kalimat/paragraf pendukung dari materi, maksimal 180 karakter.
 - Jangan menambah teks di luar JSON.
+- Pastikan JSON valid: semua string memakai petik dua, tidak ada trailing comma, dan tidak ada komentar.
 
 Format JSON wajib:
 {{
@@ -156,11 +265,12 @@ Materi PDF:
     body = {
         "model": model,
         "messages": [
-            {"role": "system", "content": "Kamu adalah pembuat soal edukasi yang akurat dan disiplin menghasilkan JSON valid."},
+            {"role": "system", "content": "Kamu adalah pembuat soal edukasi yang akurat dan hanya menghasilkan JSON valid."},
             {"role": "user", "content": prompt},
         ],
-        "temperature": 0.4,
+        "temperature": 0.2,
         "max_tokens": 4000,
+        "response_format": {"type": "json_object"},
     }
 
     headers = {"Content-Type": "application/json"}
@@ -184,8 +294,23 @@ Materi PDF:
     except URLError as exc:
         raise RuntimeError(f"9Router connection failed: {exc.reason}") from exc
 
-    content = response_payload["choices"][0]["message"]["content"]
-    return _normalize_ai_questions(_extract_json_object(content), total)
+    message = response_payload["choices"][0]["message"]
+    content = message.get("content", "")
+
+    if isinstance(content, list):
+        content = "".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in content)
+
+    parsed_content = _try_parse_message_content(content, message)
+    return _normalize_ai_questions(parsed_content, total)
+
+
+def _try_parse_message_content(content, message):
+    for key in ("parsed", "json", "function_call", "tool_calls"):
+        value = message.get(key)
+        if isinstance(value, dict) and "questions" in value:
+            return value
+
+    return _extract_json_object(content)
 
 
 def _parse_9router_response(response_text):
