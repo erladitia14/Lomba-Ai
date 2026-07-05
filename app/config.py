@@ -38,6 +38,5 @@ class Config:
     GEMINI_ENABLED = os.environ.get("GEMINI_ENABLED", "true").lower() == "true"
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
     GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-    GEMINI_FALLBACK_ENABLED = os.environ.get("GEMINI_FALLBACK_ENABLED", "true").lower() == "true"
     GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "180"))
     GEMINI_MAX_INPUT_CHARS = int(os.environ.get("GEMINI_MAX_INPUT_CHARS", "9000"))

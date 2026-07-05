@@ -1,72 +1,10 @@
 import json
-import random
 import re
-from collections import Counter
 from html import unescape
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from flask import current_app
-
-from .text_cleaner import split_sentences
-
-STOPWORDS = {
-    "yang", "dan", "di", "ke", "dari", "untuk", "dengan", "pada", "adalah", "atau",
-    "dalam", "ini", "itu", "sebagai", "karena", "oleh", "akan", "dapat", "tidak",
-    "lebih", "juga", "antara", "yaitu", "secara", "the", "and", "for", "with", "from",
-}
-
-
-def _keywords(text):
-    words = re.findall(r"\b[A-Za-zÀ-ÿ]{5,}\b", text.lower())
-    filtered = [word for word in words if word not in STOPWORDS]
-    return [word for word, _ in Counter(filtered).most_common(40)]
-
-
-def _make_question(sentence, keyword):
-    blanked = re.sub(re.escape(keyword), "_____", sentence, count=1, flags=re.IGNORECASE)
-    return f"Lengkapi pernyataan berikut: {blanked}"
-
-
-def _local_generate_questions(text, total=10):
-    sentences = split_sentences(text)
-    keywords = _keywords(text)
-
-    if len(sentences) < 2 or len(keywords) < 4:
-        return []
-
-    questions = []
-    used_sentences = set()
-
-    for sentence in sentences:
-        if len(questions) >= total:
-            break
-
-        lowered = sentence.lower()
-        answer = next((word for word in keywords if word in lowered), None)
-
-        if not answer or sentence in used_sentences:
-            continue
-
-        distractors = [word for word in keywords if word != answer and word not in lowered]
-        if len(distractors) < 3:
-            continue
-
-        options = random.sample(distractors, 3) + [answer]
-        random.shuffle(options)
-        formatted_options = [_clean_value(option.title(), max_chars=140) for option in options]
-        formatted_answer = next(option for option in formatted_options if option.casefold() == answer.casefold())
-
-        questions.append({
-            "question": _clean_value(_make_question(sentence, answer), max_chars=900),
-            "options": formatted_options,
-            "answer": formatted_answer,
-            "explanation": _clean_value(f"Jawaban yang tepat adalah '{formatted_answer}' karena kata tersebut muncul sebagai konsep penting pada kalimat asli dari materi PDF."),
-            "source": _clean_value(sentence, max_chars=240),
-        })
-        used_sentences.add(sentence)
-
-    return questions
 
 
 def _extract_json_object(content):
@@ -409,16 +347,12 @@ def _parse_gemini_response(response_payload):
     return content
 
 def generate_questions(text, total=10):
-    if current_app.config.get("GEMINI_ENABLED", True):
-        try:
-            questions = _generate_questions_with_gemini(text, total)
-            if questions:
-                return questions
-            raise RuntimeError("Gemini returned no valid questions")
-        except Exception as exc:
-            if not current_app.config.get("GEMINI_FALLBACK_ENABLED", False):
-                raise
-            current_app.logger.warning("Gemini question generation failed, using local fallback: %s", exc)
+    if not current_app.config.get("GEMINI_ENABLED", True):
+        raise RuntimeError("Gemini harus aktif. Generator lokal/fallback manual tidak tersedia.")
 
-    return _local_generate_questions(text, total)
+    questions = _generate_questions_with_gemini(text, total)
+    if not questions:
+        raise RuntimeError("Gemini tidak menghasilkan soal valid.")
+
+    return questions
 

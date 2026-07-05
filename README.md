@@ -7,7 +7,7 @@ Website Flask untuk mengubah PDF materi belajar menjadi latihan soal pilihan gan
 - Tanpa login.
 - Upload PDF maksimal 10 MB.
 - Ekstraksi teks PDF dengan `pypdf`.
-- Generator soal AI via Gemini API dengan fallback lokal opsional.
+- Generator soal AI via Gemini API tanpa fallback manual.
 - Quiz pilihan ganda.
 - Halaman hasil dan pembahasan.
 - Penyimpanan session quiz dengan SQLite.
@@ -34,7 +34,6 @@ Buat file `.env` di root project, lalu simpan API key Gemini sebagai environment
 ```env
 GEMINI_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-2.0-flash
-GEMINI_FALLBACK_ENABLED=true
 GEMINI_MAX_INPUT_CHARS=9000
 PDF_MAX_PAGES=24
 ```
@@ -43,7 +42,7 @@ API key tidak boleh dikirim ke frontend. Aplikasi Flask ini memanggil Gemini dar
 
 ## Proteksi PDF Besar
 
-Aplikasi tidak mengirim semua isi PDF besar ke AI. Backend mengambil maksimal `PDF_MAX_PAGES` halaman yang tersebar, membersihkan teks, lalu membatasi input Gemini dengan `GEMINI_MAX_INPUT_CHARS`. Jika Gemini gagal atau output JSON-nya rusak, `GEMINI_FALLBACK_ENABLED=true` membuat aplikasi tetap mencoba generator lokal.
+Aplikasi tidak mengirim semua isi PDF besar ke AI. Backend mengambil maksimal `PDF_MAX_PAGES` halaman yang tersebar, membersihkan teks, lalu membatasi input Gemini dengan `GEMINI_MAX_INPUT_CHARS`. Jika Gemini gagal atau output JSON-nya rusak, proses dihentikan dan user diminta mencoba ulang; tidak ada generator manual.
 
 ## Catatan
 
