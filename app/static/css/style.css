@@ -195,11 +195,19 @@ select {
 select option { color: #111827; }
 
 .flash-wrap { width: min(720px, calc(100% - 2rem)); margin: 1.5rem auto 0; }
-.flash { padding: 1rem; border-radius: 1rem; background: rgba(255, 107, 122, 0.16); border: 1px solid rgba(255,107,122,.4); }
+.flash {
+    padding: 1rem;
+    border-radius: 1rem;
+    background: rgba(255, 107, 122, 0.16);
+    border: 1px solid rgba(255,107,122,.4);
+    color: var(--text);
+}
+.flash.info { background: rgba(57,245,212,.14); border-color: rgba(57,245,212,.42); }
+.flash.error { background: rgba(255, 107, 122, 0.16); border-color: rgba(255,107,122,.4); }
 
 .quiz-form, .review-list { display: grid; gap: 1rem; }
 .question-top { display: flex; justify-content: space-between; color: var(--cyan); font-weight: 800; margin-bottom: 0.8rem; }
-.question-card h2, .review-card h2 { font-size: 1.25rem; line-height: 1.5; }
+.question-card h2, .review-card h2 { font-size: 1.25rem; line-height: 1.5; overflow-wrap: anywhere; }
 .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
 .option-card {
     display: flex;
@@ -209,6 +217,7 @@ select option { color: #111827; }
     border: 1px solid var(--border);
     background: rgba(255,255,255,0.06);
     cursor: pointer;
+    overflow-wrap: anywhere;
 }
 .option-card:has(input:checked) { border-color: var(--cyan); background: rgba(57,245,212,.14); }
 

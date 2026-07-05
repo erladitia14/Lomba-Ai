@@ -14,7 +14,7 @@
             <input id="pdf_file" name="pdf_file" type="file" accept="application/pdf" required>
             <span class="upload-icon">↥</span>
             <strong id="file-label">Klik untuk memilih PDF</strong>
-            <small>Maksimal 10 MB • PDF harus berisi teks</small>
+            <small>Maksimal {{ max_upload_mb }} MB - PDF besar akan diambil maksimal {{ pdf_max_pages }} halaman tersebar agar limit AI tetap aman</small>
         </label>
 
         <label class="field-label" for="total_questions">Jumlah soal</label>

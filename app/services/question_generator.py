@@ -2,6 +2,7 @@ import json
 import random
 import re
 from collections import Counter
+from html import unescape
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -53,13 +54,15 @@ def _local_generate_questions(text, total=10):
 
         options = random.sample(distractors, 3) + [answer]
         random.shuffle(options)
+        formatted_options = [_clean_value(option.title(), max_chars=140) for option in options]
+        formatted_answer = next(option for option in formatted_options if option.casefold() == answer.casefold())
 
         questions.append({
-            "question": _make_question(sentence, answer),
-            "options": [option.title() for option in options],
-            "answer": answer.title(),
-            "explanation": f"Jawaban yang tepat adalah '{answer.title()}' karena kata tersebut muncul sebagai konsep penting pada kalimat asli dari materi PDF.",
-            "source": sentence,
+            "question": _clean_value(_make_question(sentence, answer), max_chars=900),
+            "options": formatted_options,
+            "answer": formatted_answer,
+            "explanation": _clean_value(f"Jawaban yang tepat adalah '{formatted_answer}' karena kata tersebut muncul sebagai konsep penting pada kalimat asli dari materi PDF."),
+            "source": _clean_value(sentence, max_chars=240),
         })
         used_sentences.add(sentence)
 
@@ -188,6 +191,99 @@ def _json_error_context(json_text, exc):
     return f"line {exc.lineno} column {exc.colno}: {snippet}"
 
 
+def _clean_value(value, max_chars=700):
+    value = unescape(str(value or ""))
+    value = re.sub(r"<[^>]+>", " ", value)
+    value = re.sub(r"[`*_#>|\[\]{}]+", " ", value)
+    value = re.sub(r"\s+", " ", value).strip()
+    return value[:max_chars].strip()
+
+
+def _normalize_options(options):
+    if isinstance(options, dict):
+        ordered_keys = sorted(options.keys(), key=_option_key)
+        options = [options[key] for key in ordered_keys]
+    elif isinstance(options, str):
+        options = _split_option_text(options)
+    elif isinstance(options, list) and len(options) == 1 and isinstance(options[0], str):
+        split_options = _split_option_text(options[0])
+        if len(split_options) >= 4:
+            options = split_options
+
+    if not isinstance(options, list):
+        return []
+
+    return _dedupe_options(options)
+
+
+def _option_key(key):
+    key_text = str(key).strip()
+    if re.fullmatch(r"[A-Da-d]", key_text):
+        return (0, ord(key_text.upper()) - ord("A"))
+    if key_text.isdigit():
+        return (1, int(key_text))
+    return (2, key_text)
+
+
+def _split_option_text(options_text):
+    options_text = str(options_text or "")
+    matches = re.findall(
+        r"(?:^|\n)\s*[A-Da-d][\).:-]\s*(.+?)(?=\n\s*[A-Da-d][\).:-]\s*|$)",
+        options_text,
+        flags=re.DOTALL,
+    )
+    if matches:
+        return matches
+    return [line for line in options_text.splitlines() if line.strip()]
+
+
+def _dedupe_options(options):
+    unique_options = []
+    seen = set()
+    for option in options:
+        clean_option = _clean_value(option, max_chars=140)
+        normalized = clean_option.casefold()
+        if not clean_option or normalized in seen:
+            continue
+        unique_options.append(clean_option)
+        seen.add(normalized)
+    return unique_options
+
+
+def _option_matches(value, options):
+    normalized_value = _normalize_answer_text(value).casefold()
+    return next((option for option in options if option.casefold() == normalized_value), "")
+
+
+def _normalize_answer_text(value):
+    return re.sub(r"^(?:jawaban|answer)?\s*[A-Da-d][\).:-]\s*", "", _clean_value(value, max_chars=140)).strip()
+
+
+def _coerce_answer(answer, options):
+    raw_answer = _clean_value(answer, max_chars=140)
+    letter_match = re.fullmatch(r"(?:jawaban\s*)?([A-Da-d])", raw_answer)
+    if letter_match:
+        index = ord(letter_match.group(1).upper()) - ord("A")
+        if index < len(options):
+            return options[index]
+
+    answer = _normalize_answer_text(raw_answer)
+    if not answer:
+        return ""
+
+    matched_answer = _option_matches(answer, options)
+    if matched_answer:
+        return matched_answer
+
+    for option in options:
+        answer_key = answer.casefold()
+        option_key = option.casefold()
+        if len(answer_key) >= 4 and (answer_key in option_key or option_key in answer_key):
+            return option
+
+    return ""
+
+
 def _normalize_ai_questions(payload, total):
     raw_questions = payload.get("questions") if isinstance(payload, dict) else None
     if not isinstance(raw_questions, list):
@@ -198,17 +294,17 @@ def _normalize_ai_questions(payload, total):
         if not isinstance(item, dict):
             continue
 
-        question = str(item.get("question", "")).strip()
+        question = _clean_value(item.get("question", ""), max_chars=900)
         options = item.get("options", [])
-        answer = str(item.get("answer", "")).strip()
-        explanation = str(item.get("explanation", "")).strip()
-        source = str(item.get("source", "")).strip()
+        explanation = _clean_value(item.get("explanation", ""), max_chars=700)
+        source = _clean_value(item.get("source", ""), max_chars=240)
 
-        if not question or not isinstance(options, list) or len(options) != 4 or not answer:
+        if not question:
             continue
 
-        clean_options = [str(option).strip() for option in options if str(option).strip()]
-        if len(clean_options) != 4 or answer not in clean_options:
+        clean_options = _normalize_options(options)
+        answer = _coerce_answer(item.get("answer", ""), clean_options)
+        if len(clean_options) != 4 or not answer:
             continue
 
         questions.append({
@@ -225,24 +321,25 @@ def _normalize_ai_questions(payload, total):
     return questions
 
 
-def _generate_questions_with_9router(text, total):
-    base_url = current_app.config["NINE_ROUTER_BASE_URL"].rstrip("/")
-    model = current_app.config["NINE_ROUTER_MODEL"]
-    api_key = current_app.config.get("NINE_ROUTER_API_KEY", "")
-    timeout = current_app.config.get("NINE_ROUTER_TIMEOUT", 120)
+def _generate_questions_with_gemini(text, total):
+    api_key = current_app.config.get("GEMINI_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not configured")
 
-    material = text[: current_app.config.get("NINE_ROUTER_MAX_INPUT_CHARS", 14000)]
+    model = current_app.config["GEMINI_MODEL"]
+    timeout = current_app.config.get("GEMINI_TIMEOUT", 120)
+    material = text[: current_app.config.get("GEMINI_MAX_INPUT_CHARS", 14000)]
     prompt = f"""
 Buat {total} soal pilihan ganda berkualitas dari materi PDF berikut.
 
 Aturan wajib:
 - Bahasa Indonesia.
 - Setiap soal punya tepat 4 opsi jawaban.
-- Jawaban benar harus sama persis dengan salah satu opsi.
+- Jawaban benar harus sama persis dengan salah satu opsi, bukan huruf A/B/C/D.
 - Distraktor harus masuk akal dan tidak terlalu mudah ditebak.
 - Explanation singkat menjelaskan alasan jawaban benar.
 - Source berisi potongan kalimat/paragraf pendukung dari materi, maksimal 180 karakter.
-- Jangan menambah teks di luar JSON.
+- Jangan memakai Markdown, HTML, bullet list, numbering, atau teks di luar JSON.
 - Pastikan JSON valid: semua string memakai petik dua, tidak ada trailing comma, dan tidak ada komentar.
 
 Format JSON wajib:
@@ -263,86 +360,65 @@ Materi PDF:
 """.strip()
 
     body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "Kamu adalah pembuat soal edukasi yang akurat dan hanya menghasilkan JSON valid."},
-            {"role": "user", "content": prompt},
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": "Kamu adalah pembuat soal edukasi yang akurat dan hanya menghasilkan JSON valid.\n\n" + prompt}
+                ],
+            }
         ],
-        "temperature": 0.2,
-        "max_tokens": 4000,
-        "response_format": {"type": "json_object"},
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 4000,
+            "responseMimeType": "application/json",
+        },
     }
 
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
     request = Request(
-        f"{base_url}/chat/completions",
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
         data=json.dumps(body).encode("utf-8"),
-        headers=headers,
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
 
     try:
         with urlopen(request, timeout=timeout) as response:
-            response_text = response.read().decode("utf-8")
-            response_payload = _parse_9router_response(response_text)
+            response_payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"9Router HTTP {exc.code}: {detail[:500]}") from exc
+        raise RuntimeError(f"Gemini HTTP {exc.code}: {detail[:500]}") from exc
     except URLError as exc:
-        raise RuntimeError(f"9Router connection failed: {exc.reason}") from exc
+        raise RuntimeError(f"Gemini connection failed: {exc.reason}") from exc
 
-    message = response_payload["choices"][0]["message"]
-    content = message.get("content", "")
-
-    if isinstance(content, list):
-        content = "".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in content)
-
-    parsed_content = _try_parse_message_content(content, message)
+    content = _parse_gemini_response(response_payload)
+    parsed_content = _extract_json_object(content)
     return _normalize_ai_questions(parsed_content, total)
 
 
-def _try_parse_message_content(content, message):
-    for key in ("parsed", "json", "function_call", "tool_calls"):
-        value = message.get(key)
-        if isinstance(value, dict) and "questions" in value:
-            return value
+def _parse_gemini_response(response_payload):
+    candidates = response_payload.get("candidates", [])
+    if not candidates:
+        raise ValueError("Gemini response has no candidates")
 
-    return _extract_json_object(content)
+    parts = candidates[0].get("content", {}).get("parts", [])
+    content = "".join(part.get("text", "") for part in parts if isinstance(part, dict))
+    if not content.strip():
+        raise ValueError("Gemini response has no text content")
 
-
-def _parse_9router_response(response_text):
-    response_text = response_text.strip()
-    try:
-        return json.loads(response_text)
-    except json.JSONDecodeError:
-        pass
-
-    # 9Router can return one JSON object followed by SSE markers like data: [DONE].
-    for line in response_text.splitlines():
-        line = line.strip()
-        if not line or line == "data: [DONE]":
-            continue
-        if line.startswith("data: "):
-            line = line[6:].strip()
-        if line.startswith("{"):
-            return json.loads(line)
-
-    raise ValueError("9Router response is not valid JSON")
-
+    return content
 
 def generate_questions(text, total=10):
-    if current_app.config.get("NINE_ROUTER_ENABLED", True):
+    if current_app.config.get("GEMINI_ENABLED", True):
         try:
-            questions = _generate_questions_with_9router(text, total)
+            questions = _generate_questions_with_gemini(text, total)
             if questions:
                 return questions
-            raise RuntimeError("9Router returned no valid questions")
+            raise RuntimeError("Gemini returned no valid questions")
         except Exception as exc:
-            if not current_app.config.get("NINE_ROUTER_FALLBACK_ENABLED", False):
+            if not current_app.config.get("GEMINI_FALLBACK_ENABLED", False):
                 raise
-            current_app.logger.warning("9Router question generation failed, using local fallback: %s", exc)
+            current_app.logger.warning("Gemini question generation failed, using local fallback: %s", exc)
 
     return _local_generate_questions(text, total)
+

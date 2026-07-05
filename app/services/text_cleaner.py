@@ -1,10 +1,13 @@
 import re
 
 
-def clean_text(text, max_chars=12000):
+def clean_text(text, max_chars=None):
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"[^\w\s.,;:!?()\-/%]", "", text, flags=re.UNICODE)
-    return text.strip()[:max_chars]
+    text = text.strip()
+    if max_chars:
+        return text[:max_chars]
+    return text
 
 
 def split_sentences(text):

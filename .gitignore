@@ -1,7 +1,11 @@
-uploads/*
-!uploads/.gitkeep
-instance/*.db
-__pycache__/
-*.pyc
+# Local secrets
 .env
+
+# Python
+__pycache__/
+*.py[cod]
 .venv/
+instance/*.db
+
+# Upload/runtime files
+uploads/

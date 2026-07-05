@@ -28,13 +28,16 @@ class Config:
     SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-    MAX_CONTENT_LENGTH = 10 * 1024 * 1024
+    MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", str(10 * 1024 * 1024)))
     ALLOWED_EXTENSIONS = {"pdf"}
 
-    NINE_ROUTER_ENABLED = os.environ.get("NINE_ROUTER_ENABLED", "true").lower() == "true"
-    NINE_ROUTER_BASE_URL = os.environ.get("NINE_ROUTER_BASE_URL", "http://127.0.0.1:20128/api/v1")
-    NINE_ROUTER_MODEL = os.environ.get("NINE_ROUTER_MODEL", "gh/gpt-4o-mini")
-    NINE_ROUTER_API_KEY = os.environ.get("NINE_ROUTER_API_KEY", "")
-    NINE_ROUTER_FALLBACK_ENABLED = os.environ.get("NINE_ROUTER_FALLBACK_ENABLED", "false").lower() == "true"
-    NINE_ROUTER_TIMEOUT = int(os.environ.get("NINE_ROUTER_TIMEOUT", "120"))
-    NINE_ROUTER_MAX_INPUT_CHARS = int(os.environ.get("NINE_ROUTER_MAX_INPUT_CHARS", "14000"))
+    PDF_MAX_PAGES = int(os.environ.get("PDF_MAX_PAGES", "24"))
+    PDF_MAX_TEXT_CHARS = int(os.environ.get("PDF_MAX_TEXT_CHARS", "70000"))
+    CLEAN_TEXT_MAX_CHARS = int(os.environ.get("CLEAN_TEXT_MAX_CHARS", "30000"))
+
+    GEMINI_ENABLED = os.environ.get("GEMINI_ENABLED", "true").lower() == "true"
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+    GEMINI_FALLBACK_ENABLED = os.environ.get("GEMINI_FALLBACK_ENABLED", "true").lower() == "true"
+    GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "180"))
+    GEMINI_MAX_INPUT_CHARS = int(os.environ.get("GEMINI_MAX_INPUT_CHARS", "9000"))
